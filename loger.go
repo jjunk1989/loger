@@ -34,7 +34,7 @@ type Loger struct {
 	logger *log.Logger
 }
 
-func newLoger(root string) *Loger {
+func NewLoger(root string) *Loger {
 	l := &Loger{
 		LogFile: LogFile{
 			Root: root,
