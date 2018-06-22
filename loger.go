@@ -11,6 +11,11 @@ import (
 	"time"
 )
 
+const (
+	WStdout = 1 << iota
+	WFile
+)
+
 type LogFile struct {
 	Root     string
 	FileName string
@@ -29,6 +34,7 @@ func (l *LogFile) path() string {
 
 type Loger struct {
 	LogFile
+	WType  int
 	File   *os.File
 	lock   *sync.RWMutex
 	logger *log.Logger
@@ -41,6 +47,7 @@ func NewLoger(root string) *Loger {
 		},
 		lock:   new(sync.RWMutex),
 		logger: log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile),
+		WType:  WStdout | WFile,
 	}
 	l.initDir()
 	return l
@@ -60,32 +67,35 @@ func (l Loger) initDir() (err error) {
 	return
 }
 
-// short for Openfile
+// open and set io writer
 func (l *Loger) open() (err error) {
-	l.File, err = os.OpenFile(l.path(),
-		os.O_APPEND|os.O_CREATE|os.O_RDWR,
-		0755)
+	if l.WType&WFile != 0 {
+		l.File, err = os.OpenFile(l.path(),
+			os.O_APPEND|os.O_CREATE|os.O_RDWR,
+			0755)
 
-	if err != nil {
-		log.Printf("open log file error %s \r\n", err)
+		if err != nil {
+			log.Printf("open log file error %s \r\n", err)
+			return
+		}
+		var w io.Writer
+		if err != nil {
+			w = os.Stdout
+			return err
+		} else {
+			if l.WType&WStdout != 0 {
+				w = io.MultiWriter(l.File, os.Stdout)
+			} else {
+				w = io.MultiWriter(l.File)
+			}
+		}
+		l.setOutput(w)
+	} else {
+		// just use std out for default
+		l.setOutput(os.Stdout)
 		return
 	}
-	var w io.Writer
-	if err != nil {
-		w = os.Stdout
-	} else {
-		w = io.MultiWriter(os.Stdout, l.File)
-	}
-	l.setOutput(w)
 	return
-}
-
-func (l *Loger) setFlag(flag int) {
-	l.logger.SetFlags(flag)
-}
-
-func (l *Loger) setPrefix(prefix string) {
-	l.logger.SetPrefix(prefix)
 }
 
 func (l *Loger) setOutput(w io.Writer) {
@@ -96,6 +106,18 @@ func (l *Loger) setOutput(w io.Writer) {
 func (l *Loger) close() (err error) {
 	err = l.File.Close()
 	return
+}
+
+func (l *Loger) SetFlag(flag int) {
+	l.logger.SetFlags(flag)
+}
+
+func (l *Loger) SetPrefix(prefix string) {
+	l.logger.SetPrefix(prefix)
+}
+
+func (l *Loger) SetWriteType(t int) {
+	l.WType = t
 }
 
 func (l *Loger) Info(v ...interface{}) {
